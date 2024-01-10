@@ -5,23 +5,26 @@ import Test.Tasty.Bench ( bench, bgroup, defaultMain, nf, Benchmark)
 import Test.Tasty.QuickCheck
 import System.Random (randomRIO)
 
-import qualified Sorts.New3WM
-import qualified Sorts.New3WMOpt
-import qualified Sorts.Old
+import qualified Sorts.New3WM    as N3
+import qualified Sorts.New3WMOpt as N3O
+import qualified Sorts.Old       as O
 
-import Control.Monad (replicateM)
-import Control.DeepSeq (NFData)
+import Control.Monad (replicateM, forM, forM_)
+import Control.DeepSeq (NFData (rnf))
 
 import Test.Tasty.Providers (TestTree)
 import Data.Ord (comparing)
+import Data.IORef
+import GHC.IO (unsafePerformIO, evaluate)
 
 main :: IO ()
 main = do
+  -- testComparisons
   tData <- mapM benchmark sizes
   defaultMain $ testCorrect : testStable : tData
 
-sorts :: Ord a => (a -> a -> Ordering) -> [[a] -> [a]]
-sorts cmp = ($ cmp) <$> [Sorts.Old.sortBy, Sorts.New3WM.sortBy, Sorts.New3WMOpt.sortBy]
+sorts :: (Show a, Ord a) => (a -> a -> Ordering) -> [[a] -> [a]]
+sorts cmp = ($ cmp) <$> [O.sortBy, N3.sortBy, N3O.sortBy]
 
 testCorrect :: TestTree
 testCorrect = testProperty "correct" $
@@ -32,7 +35,7 @@ testStable = testProperty "stable" $
   \d -> allEq $ map (\f -> f $ zip (d :: [Int]) [(0 :: Int)..]) (sorts (comparing fst))
 
 sizes :: [Int]
-sizes = [ 0, 1, 10, 100, 10_000, 100_000, 1_000_000 ]
+sizes = [ 10_000, 100_000, 1_000_000 ]
 
 benchmark :: Int -> IO Benchmark
 benchmark size = do
@@ -44,11 +47,11 @@ benchmark size = do
       reversed  = mk (name "Reverse-Sorted") (reverse [1..size]) id
   pure $ bgroup "sort" [random, sorted, reversed]
 
-mk :: (Ord a, NFData b) => String -> c -> (([a] -> [a]) -> c -> b) -> Benchmark
-mk name dataN f = bgroup name 
-  [ bench "original" $ foo Sorts.Old.sort
-  , bench "3 way merge" $ foo Sorts.New3WM.sort
-  , bench "3 way merge optimized" $ foo Sorts.New3WMOpt.sort
+mk :: (Show a, Ord a, NFData b) => String -> c -> (([a] -> [a]) -> c -> b) -> Benchmark
+mk name dataN f = bgroup name
+  [ bench "original" $ foo O.sort
+  , bench "3 way merge" $ foo N3.sort
+  , bench "3 way merge optimized" $ foo N3O.sort
   ]
   where foo g = nf (f g) dataN
 
@@ -58,3 +61,25 @@ allEq (x : xs) = all (== x) xs
 
 randoms :: Int -> Int -> IO [[Int]]
 randoms n m = replicateM m $ replicateM n $ randomRIO (0, 10_000)
+comparisons :: ((Int -> Int -> Ordering) -> [Int] -> [Int]) -> [Int] -> IO Int
+comparisons sortBy xs = do
+    v <- newIORef 0
+    let cmp a b  = unsafePerformIO $ do
+            modifyIORef' v succ
+            pure $ a `compare` b
+    evaluate $ rnf $ sortBy cmp xs
+    readIORef v
+
+test :: [[Int]] -> String -> ((Int -> Int -> Ordering) -> [Int] -> [Int]) -> IO ()
+test xss l sortBy = do
+    x <- sum <$> forM xss (comparisons sortBy)
+    putStrLn $ l ++ show (fromIntegral x / fromIntegral (length xss))
+
+testComparisons = do
+    forM_ [1..10] $ \n' -> do
+           let n = n' * 1000
+           putStrLn $ "size " ++ show n
+           xss <- randoms n 1024
+           test xss "  original        - " O.sortBy
+           test xss "  3-way           - " N3.sortBy
+           test xss "  3-way optimized - " N3O.sortBy

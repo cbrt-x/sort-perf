@@ -1,10 +1,12 @@
 module Sorts.New3WMOpt (sort, sortBy) where
 import Data.List.NonEmpty (NonEmpty(..))
+import Test.Tasty.QuickCheck (NonEmptyList(NonEmpty))
+import Debug.Trace (traceShow, traceShowId)
 
-sort :: Ord a => [a] -> [a]
+sort :: (Show a, Ord a) => [a] -> [a]
 sort = sortBy compare
 
-sortBy :: (a -> a -> Ordering) -> [a] -> [a]
+-- sortBy :: (a -> a -> Ordering) -> [a] -> [a]
 sortBy _ [] = []
 sortBy _ [x] = [x]
 sortBy cmp ns
@@ -44,7 +46,7 @@ sortBy cmp ns
     merge [] bs   = bs
     merge as []   = as
 
-    merge' as@(a:as') bs@(b:bs') cs@(c:cs')
+    {- merge' as@(a:as') bs@(b:bs') cs@(c:cs')
       | a_gt_b, b_gt_c = c : merge'gt as (b:|bs') cs'  -- a > b > c
       | a_gt_b         = b : merge'   as bs' cs  -- a > b <= c
       | a_gt_c         = c : merge'le (a:|as') bs cs'  -- c < a <= b
@@ -54,7 +56,34 @@ sortBy cmp ns
             b_gt_c = b `gt` c
     merge' [] bs cs = merge bs cs
     merge' as [] cs = merge as cs
+    merge' as bs [] = merge as bs -}
+    
+    merge' as@(a:as') bs@(b:bs') cs@(c:cs')
+      -- = let (as'', cs'') = min' (a:|as') (c:|cs')
+      --      (af, bs'') = min' as'' (b:|bs')
+      --      (bf, cf) = min' bs'' cs''
+      = let (a1, b1) = min' (a:|as') (b:|bs')
+            (b2, cf) = min' b1 (c:|cs')
+            (af, bf) = min' a1 b2
+        in merge's af bf cf
+      -- where a_gt_b = a `gt` b
+      --      a_gt_c = a `gt` c
+      --      b_gt_c = b `gt` c
+    merge' [] bs cs = merge bs cs
+    merge' as [] cs = merge as cs
     merge' as bs [] = merge as bs
+
+    min' as@(a:|_) bs@(b:|_)
+      | a `gt` b  = (bs, as)
+      | otherwise = (as, bs)
+
+
+    merge's (a:|(a':as')) bs@(b:|_) cs@(c:|_) = a : foo (a':|as')
+      where foo as | b `gt` a' = merge's as bs cs
+                   | c `gt` a' = merge's bs as cs
+                   | otherwise = merge's bs cs as
+    merge's (a:|[]) (b:|bs) (c:|cs) = a : merge (b:bs) (c:cs)
+
 
     merge'gt as bs@(b:|bs') cs@(c:cs')
       | b_gt_c    = c : merge'gt as bs cs'  -- a > b > c
