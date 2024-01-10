@@ -1,12 +1,13 @@
 module Sorts.New3WMOpt (sort, sortBy) where
 import Data.List.NonEmpty (NonEmpty(..))
 import Test.Tasty.QuickCheck (NonEmptyList(NonEmpty))
-import Debug.Trace (traceShow, traceShowId)
+import Debug.Trace (traceShow, traceShowId, trace)
+import Unsafe.Coerce (unsafeCoerce)
 
-sort :: (Show a, Ord a) => [a] -> [a]
+sort :: Ord a => [a] -> [a]
 sort = sortBy compare
 
--- sortBy :: (a -> a -> Ordering) -> [a] -> [a]
+sortBy :: (a -> a -> Ordering) -> [a] -> [a]
 sortBy _ [] = []
 sortBy _ [x] = [x]
 sortBy cmp ns
@@ -46,29 +47,39 @@ sortBy cmp ns
     merge [] bs   = bs
     merge as []   = as
 
-    {- merge' as@(a:as') bs@(b:bs') cs@(c:cs')
-      | a_gt_b, b_gt_c = c : merge'gt as (b:|bs') cs'  -- a > b > c
-      | a_gt_b         = b : merge'   as bs' cs  -- a > b <= c
-      | a_gt_c         = c : merge'le (a:|as') bs cs'  -- c < a <= b
-      | otherwise      = a : merge'   as' bs cs  -- c >= a <= b
-      where a_gt_b = a `gt` b
-            a_gt_c = a `gt` c
-            b_gt_c = b `gt` c
-    merge' [] bs cs = merge bs cs
-    merge' as [] cs = merge as cs
-    merge' as bs [] = merge as bs -}
-    
-    merge' as@(a:as') bs@(b:bs') cs@(c:cs')
-      -- = let (as'', cs'') = min' (a:|as') (c:|cs')
-      --      (af, bs'') = min' as'' (b:|bs')
-      --      (bf, cf) = min' bs'' cs''
-      = let (a1, b1) = min' (a:|as') (b:|bs')
-            (b2, cf) = min' b1 (c:|cs')
+
+    merge' (a:as) (b:bs) (c:cs)
+      = let (a1, b1) = min' (a:|as, LT) (b:|bs, EQ)
+            (b2, cf) = min' b1 (c:|cs, GT)
             (af, bf) = min' a1 b2
         in merge's af bf cf
-      -- where a_gt_b = a `gt` b
-      --      a_gt_c = a `gt` c
-      --      b_gt_c = b `gt` c
+    merge' [] bs cs = merge bs cs
+    merge' as [] cs = merge as cs
+    merge' as bs [] = merge as bs
+
+    min' as@(a:|_, _) bs@(b:|_, _)
+      | a `gt` b  = (bs, as)
+      | otherwise = (as, bs)
+
+    merge's (a:|(a':as'), ac) bs@(b:|_, bc) cs@(c:|_, cc) = a : rec (a':|as', ac)
+      where rec as
+              | a_cmp_b == LT          = merge's as bs cs
+              | a_cmp_b == EQ, ac < bc = merge's as bs cs
+              | a_cmp_c == LT          = merge's bs as cs
+              | a_cmp_c == EQ, ac < cc = merge's bs as cs
+              | otherwise      = merge's bs cs as
+              where a_cmp_b = a' `cmp` b
+                    a_cmp_c = a' `cmp` c
+    merge's (a:|[], _) (b:|bs, bc) (c:|cs, cc)
+      | bc < cc = a : merge (b:bs) (c:cs)
+      | otherwise = a : merge (c:cs) (b:bs)
+
+    {- unstable
+    merge' (a:as) (b:bs) (c:cs)
+      = let (a1, b1) = min' (a:|as) (b:|bs)
+            (b2, cf) = min' b1 (c:|cs)
+            (af, bf) = min' a1 b2
+        in merge's af bf cf
     merge' [] bs cs = merge bs cs
     merge' as [] cs = merge as cs
     merge' as bs [] = merge as bs
@@ -78,21 +89,8 @@ sortBy cmp ns
       | otherwise = (as, bs)
 
 
-    merge's (a:|(a':as')) bs@(b:|_) cs@(c:|_) = a : foo (a':|as')
-      where foo as | b `gt` a' = merge's as bs cs
-                   | c `gt` a' = merge's bs as cs
+    merge's (a:|(a':as')) bs@(b:|_) cs@(c:|_) = a : rec (a':|as')
+      where rec as | not (a' `gt` b) = merge's as bs cs
+                   | not (a' `gt` c) = merge's bs as cs
                    | otherwise = merge's bs cs as
-    merge's (a:|[]) (b:|bs) (c:|cs) = a : merge (b:bs) (c:cs)
-
-
-    merge'gt as bs@(b:|bs') cs@(c:cs')
-      | b_gt_c    = c : merge'gt as bs cs'  -- a > b > c
-      | otherwise = b : merge'   as bs' cs  -- a > b <= c
-      where b_gt_c = b `gt` c
-    merge'gt as (b:|bs) [] = b : merge as bs
-
-    merge'le as@(a:|as') bs cs@(c:cs')
-      | a_gt_c         = c : merge'le as bs cs'  -- c < a <= b
-      | otherwise      = a : merge'   as' bs cs  -- c >= a <= b
-      where a_gt_c = a `gt` c
-    merge'le (a:|as) bs [] = a : merge as bs
+    merge's (a:|[]) (b:|bs) (c:|cs) = a : merge (b:bs) (c:cs) -}

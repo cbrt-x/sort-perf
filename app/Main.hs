@@ -16,6 +16,7 @@ import Test.Tasty.Providers (TestTree)
 import Data.Ord (comparing)
 import Data.IORef
 import GHC.IO (unsafePerformIO, evaluate)
+import Data.List.NonEmpty (NonEmpty((:|)))
 
 main :: IO ()
 main = do
@@ -75,6 +76,7 @@ test xss l sortBy = do
     x <- sum <$> forM xss (comparisons sortBy)
     putStrLn $ l ++ show (fromIntegral x / fromIntegral (length xss))
 
+testComparisons :: IO ()
 testComparisons = do
     forM_ [1..10] $ \n' -> do
            let n = n' * 1000
