@@ -10,6 +10,7 @@ import System.Random (randomRIO)
 
 -- import qualified Sorts.New3WM    as N3
 -- import qualified Sorts.New3WMOpt as N3O
+import qualified Sorts.Simple3Way as S3
 import qualified Sorts.New4WM    as N4
 import qualified Sorts.Old       as Old
 
@@ -41,6 +42,7 @@ sorts = [
     ("Old", Old.sortBy)
   -- , ("3 Way Merge", N3.sortBy)
   -- , ("3 Way Merge Optimization", N3O.sortBy)
+  , ("Simpler 3 way", S3.sortBy)
   , ("4 Way Merge", N4.sortBy)
   ]
 
